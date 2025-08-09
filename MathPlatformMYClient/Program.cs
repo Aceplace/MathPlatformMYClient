@@ -2,6 +2,7 @@
 using System.Text;
 using ImGuiNET;
 using MCYRay_cs.Auto;
+using MCYRay_cs.Auto.Gui;
 using MCYRay_cs.Auto.Menu;
 using MCYRay_cs.Auto.Settings;
 using Newtonsoft.Json;
@@ -20,9 +21,6 @@ public static class MainTemplate
         public string password = "";
     }
     
-    static string messageString = "sdklsjfkljdskldfsjdklsjfdklsjdfskldfjsldsjkldfsjdfklsjdflkjdskldfjdfklsjkl";
-    static HttpClient httpClient;
-
     [Serializable]
     public class PasswordLoginData
     {
@@ -34,7 +32,26 @@ public static class MainTemplate
     public class ServerMessage
     {
         public string message;
+        public string? student;
+        public string? token;
     }
+
+    [Serializable]
+    public class CreateNewStudentData
+    {
+        public string studentId = "";
+        public string lastName = "";
+        public string firstName = "";
+        public string email = "";
+        public string parentEmail1 = "";
+        public string parentEmail2 = "";
+        public string parentEmail3 = "";
+        public int classroomPeriod = 0;
+    }
+    
+    static string messageString = "";
+    static HttpClient httpClient;
+    static CreateNewStudentData newStudentData = new();
     
     public static void Main()
     {
@@ -81,11 +98,33 @@ public static class MainTemplate
                     passwordEnter = settingsObject.password
                 });
                 ServerMessage serverMessage = serverLoginTask.Result;
-                Console.WriteLine($"Server Message {serverMessage.message}");
+                if (!string.IsNullOrEmpty(serverMessage.token))
+                {
+                    httpClient.DefaultRequestHeaders.Authorization = 
+                        new AuthenticationHeaderValue("Bearer", serverMessage.token);
+                }
+                Console.WriteLine($"Server message... {serverMessage.message}");
             }
-            ImGui.TextWrapped(messageString);
+            
+            if (ImGui.Button("Check Protected Route"))
+            {
+                Task<ServerMessage> protectedRouteTask = ProtectedRouteTask();
+                ServerMessage serverMessage = protectedRouteTask.Result;
+                Console.WriteLine($"Server message... {serverMessage.message}");
+            }
+            ImGui.Separator();
+            
+            AutoGui.Auto("createStudentData", ref newStudentData);
+            if (ImGui.Button("Create New Student"))
+            {
+                Task<ServerMessage> createNewStudentTask = CreateStudentTask();
+                ServerMessage serverMessage = createNewStudentTask.Result;
+                Console.WriteLine($"Server message... {serverMessage.message}");
+                if (serverMessage.student != null)
+                    Console.WriteLine($"Server message... {serverMessage.student}");
+            }
+            
             MCYRay.EndImGui();
-        
             MCYRay.EndFrame();
         }
         
@@ -103,6 +142,31 @@ public static class MainTemplate
 
         string responseContent = await response.Content.ReadAsStringAsync();
         
-        return JsonConvert.DeserializeObject<ServerMessage>(responseContent);
+        return JsonConvert.DeserializeObject<ServerMessage>(responseContent)!;
+    }
+    
+    public static async Task<ServerMessage> CreateStudentTask()
+    {
+        string json = JsonConvert.SerializeObject(newStudentData);
+        StringContent content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        HttpResponseMessage response = await httpClient.PostAsync("/api/superuser/createstudent", content);
+
+        // response.EnsureSuccessStatusCode();
+
+        string responseContent = await response.Content.ReadAsStringAsync();
+        
+        return JsonConvert.DeserializeObject<ServerMessage>(responseContent)!;
+    }
+    
+    public static async Task<ServerMessage> ProtectedRouteTask()
+    {
+        HttpResponseMessage response = await httpClient.PostAsync("/api/superuser/protected", null);
+
+        // response.EnsureSuccessStatusCode();
+
+        string responseContent = await response.Content.ReadAsStringAsync();
+        
+        return JsonConvert.DeserializeObject<ServerMessage>(responseContent)!;
     }
 }
